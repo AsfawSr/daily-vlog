@@ -59,6 +59,12 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Daily Vlog requires access to your camera to record your daily activities and vlog entries.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Daily Vlog requires access to your microphone to record audio with your vlog videos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Daily Vlog requires access to your photo library to save and access recorded vlogs.</string>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
