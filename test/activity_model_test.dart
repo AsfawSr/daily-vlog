@@ -1,0 +1,67 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:daily_vlog/models/activity_model.dart';
+
+void main() {
+  group('DailyActivity Model Tests', () {
+    test('Serialization and deserialization to Map works correctly', () {
+      final now = DateTime(2026, 8, 18, 16, 30);
+      final activity = DailyActivity(
+        id: 'test-id-123',
+        title: 'Evening Run & Daily Vlog',
+        description: 'Completed 5km around the park. Feeling fresh!',
+        category: 'Workout',
+        mood: 'Energized',
+        moodEmoji: '⚡',
+        videoPath: '/data/user/0/com.dailyvlog.app/app_flutter/vlog_123.mp4',
+        videoDurationSeconds: 45,
+        createdAt: now,
+      );
+
+      final map = activity.toMap();
+
+      expect(map['id'], 'test-id-123');
+      expect(map['title'], 'Evening Run & Daily Vlog');
+      expect(map['description'], 'Completed 5km around the park. Feeling fresh!');
+      expect(map['category'], 'Workout');
+      expect(map['mood'], 'Energized');
+      expect(map['moodEmoji'], '⚡');
+      expect(map['videoPath'], '/data/user/0/com.dailyvlog.app/app_flutter/vlog_123.mp4');
+      expect(map['videoDurationSeconds'], 45);
+      expect(map['createdAt'], now.toIso8601String());
+
+      final restored = DailyActivity.fromMap(map);
+      expect(restored.id, activity.id);
+      expect(restored.title, activity.title);
+      expect(restored.description, activity.description);
+      expect(restored.category, activity.category);
+      expect(restored.mood, activity.mood);
+      expect(restored.moodEmoji, activity.moodEmoji);
+      expect(restored.videoPath, activity.videoPath);
+      expect(restored.videoDurationSeconds, 45);
+      expect(restored.createdAt, now);
+    });
+
+    test('copyWith properly overrides specified properties', () {
+      final activity = DailyActivity(
+        id: '1',
+        title: 'Original Title',
+        description: 'Original Description',
+        category: 'Work',
+        mood: 'Happy',
+        moodEmoji: '😊',
+        createdAt: DateTime.now(),
+      );
+
+      final updated = activity.copyWith(
+        title: 'Updated Title',
+        category: 'Coding',
+      );
+
+      expect(updated.id, '1');
+      expect(updated.title, 'Updated Title');
+      expect(updated.description, 'Original Description');
+      expect(updated.category, 'Coding');
+      expect(updated.mood, 'Happy');
+    });
+  });
+}

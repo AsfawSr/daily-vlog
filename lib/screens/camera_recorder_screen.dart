@@ -144,7 +144,7 @@ class _CameraRecorderScreenState extends State<CameraRecorderScreen>
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.85),
+                    Colors.black.withValues(alpha: 0.85),
                     Colors.transparent,
                   ],
                 ),
@@ -162,7 +162,7 @@ class _CameraRecorderScreenState extends State<CameraRecorderScreen>
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
                   colors: [
-                    Colors.black.withOpacity(0.9),
+                    Colors.black.withValues(alpha: 0.9),
                     Colors.transparent,
                   ],
                 ),
@@ -199,11 +199,11 @@ class _CameraRecorderScreenState extends State<CameraRecorderScreen>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.85),
+                          color: Colors.red.withValues(alpha: 0.85),
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.red.withOpacity(0.5),
+                              color: Colors.red.withValues(alpha: 0.5),
                               blurRadius: 10,
                               spreadRadius: 2,
                             ),
@@ -238,7 +238,7 @@ class _CameraRecorderScreenState extends State<CameraRecorderScreen>
                       Text(
                         'DAILY VLOG CAMERA',
                         style: GoogleFonts.outfit(
-                          color: Colors.white.withOpacity(0.85),
+                          color: Colors.white.withValues(alpha: 0.85),
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
                           letterSpacing: 2,
@@ -371,7 +371,7 @@ class _CameraRecorderScreenState extends State<CameraRecorderScreen>
                 width: 90,
                 height: 90,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF6366F1).withOpacity(0.15),
+                  color: const Color(0xFF6366F1).withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(

@@ -356,7 +356,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
+                      color: Colors.black.withValues(alpha: 0.7),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
@@ -422,10 +422,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B).withOpacity(0.6),
+          color: const Color(0xFF1E293B).withValues(alpha: 0.6),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: const Color(0xFF6366F1).withOpacity(0.4),
+            color: const Color(0xFF6366F1).withValues(alpha: 0.4),
             style: BorderStyle.solid,
             width: 1.5,
           ),
@@ -436,7 +436,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF6366F1).withOpacity(0.2),
+                color: const Color(0xFF6366F1).withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.videocam_rounded,
@@ -484,7 +484,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? const Color(0xFF6366F1).withOpacity(0.25)
+                    ? const Color(0xFF6366F1).withValues(alpha: 0.25)
                     : const Color(0xFF1E293B),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
