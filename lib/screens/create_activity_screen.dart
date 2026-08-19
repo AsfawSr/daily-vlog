@@ -33,15 +33,6 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   bool _isSaving = false;
 
   late String _selectedCategory;
-
-  final List<Map<String, String>> _moods = [
-    {'name': 'Energized', 'emoji': '⚡'},
-    {'name': 'Happy', 'emoji': '😊'},
-    {'name': 'Calm', 'emoji': '😌'},
-    {'name': 'Focused', 'emoji': '🎯'},
-    {'name': 'Tired', 'emoji': '😴'},
-  ];
-
   late Map<String, String> _selectedMood;
 
   @override
@@ -49,7 +40,12 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     super.initState();
     final initialCats = DatabaseService().getCategories();
     _selectedCategory = initialCats.isNotEmpty ? initialCats.first['name']! : 'Workout';
-    _selectedMood = _moods[1]; // Happy by default
+    
+    final initialMoods = DatabaseService().getMoods();
+    _selectedMood = initialMoods.isNotEmpty
+        ? initialMoods.first
+        : {'name': 'Happy', 'emoji': '😊'};
+
     _videoPath = widget.initialVideoPath;
     _videoDuration = widget.videoDurationSeconds;
 
@@ -461,47 +457,238 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   }
 
   Widget _buildMoodSelector() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: _moods.map((m) {
-          final isSelected = _selectedMood['name'] == m['name'];
-          return GestureDetector(
-            onTap: () => setState(() => _selectedMood = m),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.only(right: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? const Color(0xFF6366F1).withValues(alpha: 0.25)
-                    : const Color(0xFF1E293B),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: isSelected
-                      ? const Color(0xFF6366F1)
-                      : const Color(0xFF334155),
-                  width: isSelected ? 1.5 : 1,
+    return ValueListenableBuilder(
+      valueListenable: DatabaseService().listenableMoods,
+      builder: (context, box, child) {
+        final moods = DatabaseService().getMoods();
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              ...moods.map((m) {
+                final isSelected = _selectedMood['name']?.toLowerCase() ==
+                    m['name']?.toLowerCase();
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedMood = m),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.only(right: 10),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFF6366F1).withValues(alpha: 0.25)
+                          : const Color(0xFF1E293B),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isSelected
+                            ? const Color(0xFF6366F1)
+                            : const Color(0xFF334155),
+                        width: isSelected ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(m['emoji'] ?? '😊',
+                            style: const TextStyle(fontSize: 18)),
+                        const SizedBox(width: 8),
+                        Text(
+                          m['name'] ?? 'Happy',
+                          style: GoogleFonts.outfit(
+                            color: isSelected
+                                ? Colors.white
+                                : const Color(0xFF94A3B8),
+                            fontWeight:
+                                isSelected ? FontWeight.w700 : FontWeight.w500,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+              // "+ Custom" Mood Button
+              GestureDetector(
+                onTap: () => _showAddMoodDialog(context),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6366F1).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: const Color(0xFF6366F1).withValues(alpha: 0.5),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.add_rounded,
+                          color: Color(0xFF818CF8), size: 18),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Add Custom',
+                        style: GoogleFonts.outfit(
+                          color: const Color(0xFF818CF8),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              child: Row(
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showAddMoodDialog(BuildContext context) {
+    final moodNameController = TextEditingController();
+    String selectedEmoji = '😊';
+
+    final moodEmojis = [
+      '😊', '😌', '⚡', '🎯', '🔥', '🙏', '😴', '🤩', 
+      '😍', '😎', '🥳', '😇', '🥺', '🤯', '🕊️', '🌟', 
+      '🌈', '🍂', '🌧️', '💤', '🥊', '🧗', '🧘', '☕', 
+      '🌻', '💖', '💪', '💯', '✨', '🏖️', '👑', '🎉',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1E293B),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text(
+              'Create Custom Mood',
+              style: GoogleFonts.outfit(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+              ),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(m['emoji']!, style: const TextStyle(fontSize: 18)),
-                  const SizedBox(width: 8),
                   Text(
-                    m['name']!,
+                    'HOW ARE YOU FEELING?',
                     style: GoogleFonts.outfit(
-                      color: isSelected ? Colors.white : const Color(0xFF94A3B8),
-                      fontWeight:
-                          isSelected ? FontWeight.w700 : FontWeight.w500,
-                      fontSize: 14,
+                      color: const Color(0xFF94A3B8),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.1,
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: moodNameController,
+                    autofocus: true,
+                    style:
+                        GoogleFonts.inter(color: Colors.white, fontSize: 15),
+                    decoration: InputDecoration(
+                      hintText: 'e.g. Grateful, Hyped, Peaceful...',
+                      hintStyle: GoogleFonts.inter(
+                          color: const Color(0xFF64748B), fontSize: 14),
+                      filled: true,
+                      fillColor: const Color(0xFF0F172A),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                            color: Color(0xFF6366F1), width: 1.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'CHOOSE MOOD EMOJI',
+                    style: GoogleFonts.outfit(
+                      color: const Color(0xFF94A3B8),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: moodEmojis.map((emoji) {
+                      final isSelected = selectedEmoji == emoji;
+                      return GestureDetector(
+                        onTap: () {
+                          setDialogState(() => selectedEmoji = emoji);
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? const Color(0xFF6366F1).withValues(alpha: 0.35)
+                                : const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isSelected
+                                  ? const Color(0xFF6366F1)
+                                  : const Color(0xFF334155),
+                              width: isSelected ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Text(emoji,
+                              style: const TextStyle(fontSize: 20)),
+                        ),
+                      );
+                    }).toList(),
                   ),
                 ],
               ),
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text('Cancel',
+                    style: GoogleFonts.inter(color: const Color(0xFF94A3B8))),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () async {
+                  final name = moodNameController.text.trim();
+                  if (name.isNotEmpty) {
+                    await DatabaseService().addMood(name, selectedEmoji);
+                    if (mounted) {
+                      setState(() {
+                        _selectedMood = {'name': name, 'emoji': selectedEmoji};
+                      });
+                    }
+                    if (ctx.mounted) {
+                      Navigator.of(ctx).pop();
+                    }
+                  }
+                },
+                child: Text(
+                  'Add Mood',
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
           );
-        }).toList(),
+        },
       ),
     );
   }

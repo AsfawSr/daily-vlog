@@ -10,9 +10,11 @@ class DatabaseService {
 
   static const String activitiesBoxName = 'daily_activities_box';
   static const String categoriesBoxName = 'daily_categories_box';
+  static const String moodsBoxName = 'daily_moods_box';
 
   Box? _activitiesBox;
   Box? _categoriesBox;
+  Box? _moodsBox;
 
   static const List<Map<String, String>> defaultCategories = [
     {'name': 'Workout', 'icon': '🏋️'},
@@ -27,15 +29,33 @@ class DatabaseService {
     {'name': 'Reading', 'icon': '📖'},
   ];
 
+  static const List<Map<String, String>> defaultMoods = [
+    {'name': 'Energized', 'emoji': '⚡'},
+    {'name': 'Happy', 'emoji': '😊'},
+    {'name': 'Calm', 'emoji': '😌'},
+    {'name': 'Focused', 'emoji': '🎯'},
+    {'name': 'Motivated', 'emoji': '🔥'},
+    {'name': 'Grateful', 'emoji': '🙏'},
+    {'name': 'Tired', 'emoji': '😴'},
+  ];
+
   Future<void> init() async {
     await Hive.initFlutter();
     _activitiesBox = await Hive.openBox(activitiesBoxName);
     _categoriesBox = await Hive.openBox(categoriesBoxName);
+    _moodsBox = await Hive.openBox(moodsBoxName);
 
-    // Populate default categories on first run if box is empty
+    // Populate default categories if empty
     if (_categoriesBox!.isEmpty) {
       for (final cat in defaultCategories) {
         await _categoriesBox!.put(cat['name']!.toLowerCase(), cat);
+      }
+    }
+
+    // Populate default moods if empty
+    if (_moodsBox!.isEmpty) {
+      for (final mood in defaultMoods) {
+        await _moodsBox!.put(mood['name']!.toLowerCase(), mood);
       }
     }
   }
@@ -54,8 +74,55 @@ class DatabaseService {
     return _categoriesBox!;
   }
 
+  Box get moodsBox {
+    if (_moodsBox == null || !_moodsBox!.isOpen) {
+      throw Exception("DatabaseService moodsBox not initialized. Call init() first.");
+    }
+    return _moodsBox!;
+  }
+
   ValueListenable<Box> get listenable => box.listenable();
   ValueListenable<Box> get listenableCategories => categoriesBox.listenable();
+  ValueListenable<Box> get listenableMoods => moodsBox.listenable();
+
+  // ==================== MOODS CRUD ====================
+
+  /// Retrieve all moods (default + user-created)
+  List<Map<String, String>> getMoods() {
+    final rawValues = moodsBox.values.toList();
+    if (rawValues.isEmpty) {
+      return List<Map<String, String>>.from(defaultMoods);
+    }
+
+    final list = <Map<String, String>>[];
+    for (final item in rawValues) {
+      if (item is Map) {
+        list.add({
+          'name': item['name']?.toString() ?? 'Happy',
+          'emoji': item['emoji']?.toString() ?? '😊',
+        });
+      }
+    }
+    return list;
+  }
+
+  /// Add a custom mood
+  Future<void> addMood(String name, String emoji) async {
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) return;
+
+    final key = cleanName.toLowerCase();
+    await moodsBox.put(key, {
+      'name': cleanName,
+      'emoji': emoji.trim().isNotEmpty ? emoji.trim() : '😊',
+    });
+  }
+
+  /// Delete a custom mood
+  Future<void> deleteMood(String name) async {
+    final key = name.toLowerCase();
+    await moodsBox.delete(key);
+  }
 
   // ==================== CATEGORIES CRUD ====================
 
