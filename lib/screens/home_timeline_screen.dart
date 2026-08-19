@@ -18,18 +18,6 @@ class HomeTimelineScreen extends StatefulWidget {
 class _HomeTimelineScreenState extends State<HomeTimelineScreen> {
   String _selectedCategory = 'All';
 
-  final List<String> _filterCategories = [
-    'All',
-    'Workout',
-    'Work',
-    'Study',
-    'Creative',
-    'Travel',
-    'Food',
-    'Coding',
-    'Life',
-  ];
-
   String _formatDateHeader(DateTime date) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -377,46 +365,70 @@ class _HomeTimelineScreenState extends State<HomeTimelineScreen> {
   }
 
   Widget _buildCategoryFilter() {
-    return SizedBox(
-      height: 38,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: _filterCategories.length,
-        itemBuilder: (context, index) {
-          final cat = _filterCategories[index];
-          final isSelected = _selectedCategory == cat;
+    return ValueListenableBuilder(
+      valueListenable: DatabaseService().listenableCategories,
+      builder: (context, box, child) {
+        final categories = DatabaseService().getCategories();
+        final filterItems = [
+          {'name': 'All', 'icon': '✨'},
+          ...categories,
+        ];
 
-          return Padding(
-            padding: const EdgeInsets.only(right: 8.0),
-            child: ChoiceChip(
-              label: Text(
-                cat,
-                style: GoogleFonts.outfit(
-                  color: isSelected ? Colors.white : const Color(0xFF94A3B8),
-                  fontWeight:
-                      isSelected ? FontWeight.w700 : FontWeight.w500,
-                  fontSize: 13,
+        return SizedBox(
+          height: 38,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: filterItems.length,
+            itemBuilder: (context, index) {
+              final cat = filterItems[index];
+              final catName = cat['name']!;
+              final isSelected =
+                  _selectedCategory.toLowerCase() == catName.toLowerCase();
+
+              return Padding(
+                padding: const EdgeInsets.only(right: 8.0),
+                child: ChoiceChip(
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (cat['icon'] != null && catName != 'All') ...[
+                        Text(cat['icon']!, style: const TextStyle(fontSize: 13)),
+                        const SizedBox(width: 5),
+                      ],
+                      Text(
+                        catName,
+                        style: GoogleFonts.outfit(
+                          color: isSelected
+                              ? Colors.white
+                              : const Color(0xFF94A3B8),
+                          fontWeight:
+                              isSelected ? FontWeight.w700 : FontWeight.w500,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                  selected: isSelected,
+                  selectedColor: const Color(0xFF6366F1),
+                  backgroundColor: const Color(0xFF1E293B),
+                  side: BorderSide(
+                    color: isSelected
+                        ? const Color(0xFF6366F1)
+                        : const Color(0xFF334155),
+                  ),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  onSelected: (selected) {
+                    if (selected) {
+                      setState(() => _selectedCategory = catName);
+                    }
+                  },
                 ),
-              ),
-              selected: isSelected,
-              selectedColor: const Color(0xFF6366F1),
-              backgroundColor: const Color(0xFF1E293B),
-              side: BorderSide(
-                color: isSelected
-                    ? const Color(0xFF6366F1)
-                    : const Color(0xFF334155),
-              ),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              onSelected: (selected) {
-                if (selected) {
-                  setState(() => _selectedCategory = cat);
-                }
-              },
-            ),
-          );
-        },
-      ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 

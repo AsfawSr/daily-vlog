@@ -32,17 +32,6 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   VideoPlayerController? _videoPlayerController;
   bool _isSaving = false;
 
-  final List<Map<String, String>> _categories = [
-    {'name': 'Workout', 'icon': '🏋️'},
-    {'name': 'Work', 'icon': '💼'},
-    {'name': 'Study', 'icon': '📚'},
-    {'name': 'Creative', 'icon': '🎨'},
-    {'name': 'Travel', 'icon': '✈️'},
-    {'name': 'Food', 'icon': '🍲'},
-    {'name': 'Coding', 'icon': '💻'},
-    {'name': 'Life', 'icon': '🌿'},
-  ];
-
   late String _selectedCategory;
 
   final List<Map<String, String>> _moods = [
@@ -58,7 +47,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedCategory = _categories.first['name']!;
+    final initialCats = DatabaseService().getCategories();
+    _selectedCategory = initialCats.isNotEmpty ? initialCats.first['name']! : 'Workout';
     _selectedMood = _moods[1]; // Happy by default
     _videoPath = widget.initialVideoPath;
     _videoDuration = widget.videoDurationSeconds;
@@ -517,44 +507,221 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   }
 
   Widget _buildCategorySelector() {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: _categories.map((cat) {
-        final isSelected = _selectedCategory == cat['name'];
-        return ChoiceChip(
-          label: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(cat['icon']!, style: const TextStyle(fontSize: 14)),
-              const SizedBox(width: 6),
-              Text(
-                cat['name']!,
+    return ValueListenableBuilder(
+      valueListenable: DatabaseService().listenableCategories,
+      builder: (context, box, child) {
+        final categories = DatabaseService().getCategories();
+
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ...categories.map((cat) {
+              final isSelected = _selectedCategory.toLowerCase() == cat['name']!.toLowerCase();
+              return ChoiceChip(
+                label: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(cat['icon']!, style: const TextStyle(fontSize: 14)),
+                    const SizedBox(width: 6),
+                    Text(
+                      cat['name']!,
+                      style: GoogleFonts.outfit(
+                        color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+                        fontWeight:
+                            isSelected ? FontWeight.w700 : FontWeight.w500,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+                selected: isSelected,
+                selectedColor: const Color(0xFF6366F1),
+                backgroundColor: const Color(0xFF1E293B),
+                side: BorderSide(
+                  color: isSelected
+                      ? const Color(0xFF6366F1)
+                      : const Color(0xFF334155),
+                ),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                onSelected: (selected) {
+                  if (selected) {
+                    setState(() => _selectedCategory = cat['name']!);
+                  }
+                },
+              );
+            }),
+            // "+ Add Custom" Category Button
+            ActionChip(
+              avatar: const Icon(Icons.add_rounded,
+                  color: Color(0xFF818CF8), size: 18),
+              label: Text(
+                'Add Custom',
                 style: GoogleFonts.outfit(
-                  color: isSelected ? Colors.white : const Color(0xFF94A3B8),
-                  fontWeight:
-                      isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: const Color(0xFF818CF8),
+                  fontWeight: FontWeight.w700,
                   fontSize: 13,
                 ),
               ),
-            ],
-          ),
-          selected: isSelected,
-          selectedColor: const Color(0xFF6366F1),
-          backgroundColor: const Color(0xFF1E293B),
-          side: BorderSide(
-            color: isSelected
-                ? const Color(0xFF6366F1)
-                : const Color(0xFF334155),
-          ),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          onSelected: (selected) {
-            if (selected) {
-              setState(() => _selectedCategory = cat['name']!);
-            }
-          },
+              backgroundColor: const Color(0xFF6366F1).withValues(alpha: 0.15),
+              side: BorderSide(
+                color: const Color(0xFF6366F1).withValues(alpha: 0.5),
+              ),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              onPressed: () => _showAddCategoryDialog(context),
+            ),
+          ],
         );
-      }).toList(),
+      },
+    );
+  }
+
+  void _showAddCategoryDialog(BuildContext context) {
+    final catNameController = TextEditingController();
+    String selectedEmoji = '✨';
+
+    final popularEmojis = [
+      '✨', '🧘', '🎸', '🎮', '🚴', '🏊', '🍕', '🎬', 
+      '💡', '📝', '🚀', '🎯', '🎧', '🐶', '☀️', '🛠️', 
+      '☕', '📖', '🧪', '🌿', '🌱', '🧁', '⚽', '🚗',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1E293B),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text(
+              'Create Custom Category',
+              style: GoogleFonts.outfit(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+              ),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'CATEGORY NAME',
+                    style: GoogleFonts.outfit(
+                      color: const Color(0xFF94A3B8),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: catNameController,
+                    autofocus: true,
+                    style:
+                        GoogleFonts.inter(color: Colors.white, fontSize: 15),
+                    decoration: InputDecoration(
+                      hintText: 'e.g. Meditation, Guitar, Cooking...',
+                      hintStyle: GoogleFonts.inter(
+                          color: const Color(0xFF64748B), fontSize: 14),
+                      filled: true,
+                      fillColor: const Color(0xFF0F172A),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                            color: Color(0xFF6366F1), width: 1.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'PICK AN ICON / EMOJI',
+                    style: GoogleFonts.outfit(
+                      color: const Color(0xFF94A3B8),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: popularEmojis.map((emoji) {
+                      final isSelected = selectedEmoji == emoji;
+                      return GestureDetector(
+                        onTap: () {
+                          setDialogState(() => selectedEmoji = emoji);
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? const Color(0xFF6366F1).withValues(alpha: 0.35)
+                                : const Color(0xFF0F172A),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isSelected
+                                  ? const Color(0xFF6366F1)
+                                  : const Color(0xFF334155),
+                              width: isSelected ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Text(emoji,
+                              style: const TextStyle(fontSize: 20)),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text('Cancel',
+                    style: GoogleFonts.inter(color: const Color(0xFF94A3B8))),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () async {
+                  final name = catNameController.text.trim();
+                  if (name.isNotEmpty) {
+                    await DatabaseService().addCategory(name, selectedEmoji);
+                    if (mounted) {
+                      setState(() {
+                        _selectedCategory = name;
+                      });
+                    }
+                    if (ctx.mounted) {
+                      Navigator.of(ctx).pop();
+                    }
+                  }
+                },
+                child: Text(
+                  'Add Category',
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
+

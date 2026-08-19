@@ -8,22 +8,95 @@ class DatabaseService {
   factory DatabaseService() => _instance;
   DatabaseService._internal();
 
-  static const String boxName = 'daily_activities_box';
-  Box? _box;
+  static const String activitiesBoxName = 'daily_activities_box';
+  static const String categoriesBoxName = 'daily_categories_box';
+
+  Box? _activitiesBox;
+  Box? _categoriesBox;
+
+  static const List<Map<String, String>> defaultCategories = [
+    {'name': 'Workout', 'icon': '🏋️'},
+    {'name': 'Work', 'icon': '💼'},
+    {'name': 'Study', 'icon': '📚'},
+    {'name': 'Creative', 'icon': '🎨'},
+    {'name': 'Travel', 'icon': '✈️'},
+    {'name': 'Food', 'icon': '🍲'},
+    {'name': 'Coding', 'icon': '💻'},
+    {'name': 'Life', 'icon': '🌿'},
+    {'name': 'Morning Routine', 'icon': '☕'},
+    {'name': 'Reading', 'icon': '📖'},
+  ];
 
   Future<void> init() async {
     await Hive.initFlutter();
-    _box = await Hive.openBox(boxName);
+    _activitiesBox = await Hive.openBox(activitiesBoxName);
+    _categoriesBox = await Hive.openBox(categoriesBoxName);
+
+    // Populate default categories on first run if box is empty
+    if (_categoriesBox!.isEmpty) {
+      for (final cat in defaultCategories) {
+        await _categoriesBox!.put(cat['name']!.toLowerCase(), cat);
+      }
+    }
   }
 
   Box get box {
-    if (_box == null || !_box!.isOpen) {
+    if (_activitiesBox == null || !_activitiesBox!.isOpen) {
       throw Exception("DatabaseService not initialized. Call init() first.");
     }
-    return _box!;
+    return _activitiesBox!;
+  }
+
+  Box get categoriesBox {
+    if (_categoriesBox == null || !_categoriesBox!.isOpen) {
+      throw Exception("DatabaseService categoriesBox not initialized. Call init() first.");
+    }
+    return _categoriesBox!;
   }
 
   ValueListenable<Box> get listenable => box.listenable();
+  ValueListenable<Box> get listenableCategories => categoriesBox.listenable();
+
+  // ==================== CATEGORIES CRUD ====================
+
+  /// Retrieve all categories (default + user-created)
+  List<Map<String, String>> getCategories() {
+    final rawValues = categoriesBox.values.toList();
+    if (rawValues.isEmpty) {
+      return List<Map<String, String>>.from(defaultCategories);
+    }
+
+    final list = <Map<String, String>>[];
+    for (final item in rawValues) {
+      if (item is Map) {
+        list.add({
+          'name': item['name']?.toString() ?? 'General',
+          'icon': item['icon']?.toString() ?? '📌',
+        });
+      }
+    }
+    return list;
+  }
+
+  /// Add a custom category
+  Future<void> addCategory(String name, String icon) async {
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) return;
+
+    final key = cleanName.toLowerCase();
+    await categoriesBox.put(key, {
+      'name': cleanName,
+      'icon': icon.trim().isNotEmpty ? icon.trim() : '📌',
+    });
+  }
+
+  /// Delete a custom category
+  Future<void> deleteCategory(String name) async {
+    final key = name.toLowerCase();
+    await categoriesBox.delete(key);
+  }
+
+  // ==================== ACTIVITIES CRUD ====================
 
   /// Retrieve all activities sorted by creation date (newest first)
   List<DailyActivity> getAllActivities() {
@@ -40,7 +113,7 @@ class DatabaseService {
     return activities;
   }
 
-  /// Get activities grouped by day string (e.g. "Today", "Yesterday", "2026-08-18")
+  /// Get activities grouped by day
   Map<DateTime, List<DailyActivity>> getActivitiesGroupedByDate() {
     final all = getAllActivities();
     final grouped = <DateTime, List<DailyActivity>>{};
