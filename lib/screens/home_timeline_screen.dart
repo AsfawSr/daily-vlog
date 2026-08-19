@@ -179,7 +179,7 @@ class _HomeTimelineScreenState extends State<HomeTimelineScreen> {
             Row(
               children: [
                 Text(
-                  'Daily Vlog',
+                  'Day Vlog',
                   style: GoogleFonts.outfit(
                     color: Colors.white,
                     fontSize: 26,

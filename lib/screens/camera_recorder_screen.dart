@@ -236,7 +236,7 @@ class _CameraRecorderScreenState extends State<CameraRecorderScreen>
                       )
                     else
                       Text(
-                        'DAILY VLOG CAMERA',
+                        'DAY VLOG CAMERA',
                         style: GoogleFonts.outfit(
                           color: Colors.white.withValues(alpha: 0.85),
                           fontWeight: FontWeight.w600,
