@@ -74,6 +74,16 @@ class StorageService {
     }
   }
 
+  /// Saves multiple captured photos into persistent storage
+  Future<List<String>> persistPhotos(List<String> tempPhotoPaths) async {
+    final savedPaths = <String>[];
+    for (final path in tempPhotoPaths) {
+      final saved = await persistPhoto(path);
+      savedPaths.add(saved);
+    }
+    return savedPaths;
+  }
+
   /// Deletes a media file (video or photo) from disk safely
   Future<bool> deleteMedia(String? filePath) async {
     if (filePath == null || filePath.isEmpty) return false;

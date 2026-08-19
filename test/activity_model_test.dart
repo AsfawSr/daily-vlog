@@ -90,5 +90,39 @@ void main() {
       expect(restored.mediaType, 'photo');
       expect(restored.mediaPath, contains('photo_123.jpg'));
     });
+
+    test('Multiple photos serialization and deserialization works correctly', () {
+      final multiPhotoActivity = DailyActivity(
+        id: 'multi-1',
+        title: 'Weekend Hike',
+        description: 'Photos from the mountain trail',
+        category: 'Travel',
+        mood: 'Energized',
+        moodEmoji: '⚡',
+        mediaPaths: [
+          '/app_flutter/photo_1.jpg',
+          '/app_flutter/photo_2.jpg',
+          '/app_flutter/photo_3.jpg',
+        ],
+        mediaType: 'photo',
+        createdAt: DateTime.now(),
+      );
+
+      expect(multiPhotoActivity.hasPhoto, isTrue);
+      expect(multiPhotoActivity.hasMultiplePhotos, isTrue);
+      expect(multiPhotoActivity.photoCount, 3);
+      expect(multiPhotoActivity.photoPaths.length, 3);
+
+      final map = multiPhotoActivity.toMap();
+      expect(map['mediaPaths'], isList);
+      expect((map['mediaPaths'] as List).length, 3);
+
+      final restored = DailyActivity.fromMap(map);
+      expect(restored.hasMultiplePhotos, isTrue);
+      expect(restored.photoCount, 3);
+      expect(restored.photoPaths[0], contains('photo_1.jpg'));
+      expect(restored.photoPaths[1], contains('photo_2.jpg'));
+      expect(restored.photoPaths[2], contains('photo_3.jpg'));
+    });
   });
 }

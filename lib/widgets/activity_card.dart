@@ -167,7 +167,11 @@ class ActivityCard extends StatelessWidget {
                                     color: Color(0xFF818CF8), size: 18),
                                 const SizedBox(width: 8),
                                 Text(
-                                  hasPhoto ? 'Save Photo' : 'Save Video',
+                                  hasPhoto
+                                      ? (activity.photoCount > 1
+                                          ? 'Save ${activity.photoCount} Photos'
+                                          : 'Save Photo')
+                                      : 'Save Video',
                                   style: const TextStyle(color: Colors.white),
                                 ),
                               ],
@@ -218,7 +222,7 @@ class ActivityCard extends StatelessWidget {
 
                 const SizedBox(height: 14),
 
-                // Media Indicator Bar (Video or Photo)
+                // Media Indicator Bar (Video or Multi-Photo)
                 if (hasVideo)
                   Container(
                     padding:
@@ -286,17 +290,37 @@ class ActivityCard extends StatelessWidget {
                             color: Color(0xFF3B82F6),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.photo_camera_rounded,
-                              color: Colors.white, size: 16),
+                          child: Icon(
+                            activity.hasMultiplePhotos
+                                ? Icons.photo_library_rounded
+                                : Icons.photo_camera_rounded,
+                            color: Colors.white,
+                            size: 16,
+                          ),
                         ),
                         const SizedBox(width: 10),
-                        Text(
-                          'View Photo Memory',
-                          style: GoogleFonts.outfit(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              activity.hasMultiplePhotos
+                                  ? 'View ${activity.photoCount} Photos'
+                                  : 'View Photo Memory',
+                              style: GoogleFonts.outfit(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                            if (activity.hasMultiplePhotos)
+                              Text(
+                                'Swipe to view album',
+                                style: GoogleFonts.inter(
+                                  color: const Color(0xFF64748B),
+                                  fontSize: 11,
+                                ),
+                              ),
+                          ],
                         ),
                         const Spacer(),
                         const Icon(Icons.arrow_forward_ios_rounded,
@@ -393,19 +417,11 @@ class ActivityCard extends StatelessWidget {
   }
 
   Future<void> _saveMediaToGallery(BuildContext context) async {
-    if (activity.mediaPath == null) return;
-    final file = File(activity.mediaPath!);
-    if (!await file.exists()) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Color(0xFFEF4444),
-            content: Text('Media file not found on disk.'),
-          ),
-        );
-      }
-      return;
-    }
+    final paths = activity.photoPaths.isNotEmpty
+        ? activity.photoPaths
+        : (activity.mediaPath != null ? [activity.mediaPath!] : <String>[]);
+
+    if (paths.isEmpty) return;
 
     try {
       final hasAccess = await Gal.hasAccess();
@@ -413,13 +429,26 @@ class ActivityCard extends StatelessWidget {
         await Gal.requestAccess();
       }
 
-      if (activity.hasPhoto) {
-        await Gal.putImage(activity.mediaPath!, album: 'Day Vlog');
-      } else {
-        await Gal.putVideo(activity.mediaPath!, album: 'Day Vlog');
+      int savedCount = 0;
+      for (final p in paths) {
+        final file = File(p);
+        if (await file.exists()) {
+          if (activity.hasPhoto) {
+            await Gal.putImage(p, album: 'Day Vlog');
+          } else {
+            await Gal.putVideo(p, album: 'Day Vlog');
+          }
+          savedCount++;
+        }
       }
 
       if (context.mounted) {
+        final msg = activity.hasPhoto
+            ? (savedCount > 1
+                ? 'Saved $savedCount photos to Gallery album "Day Vlog"!'
+                : 'Saved "${activity.title}" photo to Gallery album "Day Vlog"!')
+            : 'Saved "${activity.title}" video to Gallery album "Day Vlog"!';
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFF10B981),
@@ -432,7 +461,7 @@ class ActivityCard extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Saved "${activity.title}" to Gallery album "Day Vlog"!',
+                    msg,
                     style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                   ),
                 ),

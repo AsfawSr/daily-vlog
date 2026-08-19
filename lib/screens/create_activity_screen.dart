@@ -9,6 +9,7 @@ import '../services/storage_service.dart';
 import 'camera_recorder_screen.dart';
 
 class CreateActivityScreen extends StatefulWidget {
+  final List<String>? initialPhotoPaths;
   final String? initialMediaPath;
   final String? initialVideoPath;
   final String mediaType; // 'video', 'photo', or 'text'
@@ -16,6 +17,7 @@ class CreateActivityScreen extends StatefulWidget {
 
   const CreateActivityScreen({
     super.key,
+    this.initialPhotoPaths,
     this.initialMediaPath,
     this.initialVideoPath,
     this.mediaType = 'text',
@@ -31,7 +33,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
 
-  String? _mediaPath;
+  final List<String> _photoPaths = [];
+  String? _videoPath;
   String _mediaType = 'text';
   int _videoDuration = 0;
   VideoPlayerController? _videoPlayerController;
@@ -51,18 +54,22 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
         ? initialMoods.first
         : {'name': 'Happy', 'emoji': '😊'};
 
-    _mediaPath = widget.initialMediaPath ?? widget.initialVideoPath;
-    _videoDuration = widget.videoDurationSeconds;
-
-    if (_mediaPath != null) {
-      if (widget.mediaType != 'text') {
-        _mediaType = widget.mediaType;
-      } else {
-        _mediaType = _mediaPath!.endsWith('.mp4') ? 'video' : 'photo';
-      }
-
-      if (_mediaType == 'video') {
-        _initMiniVideoPlayer(_mediaPath!);
+    // Initialize photos or video
+    if (widget.initialPhotoPaths != null && widget.initialPhotoPaths!.isNotEmpty) {
+      _photoPaths.addAll(widget.initialPhotoPaths!);
+      _mediaType = 'photo';
+    } else {
+      final singlePath = widget.initialMediaPath ?? widget.initialVideoPath;
+      if (singlePath != null) {
+        if (widget.mediaType == 'photo' || !singlePath.endsWith('.mp4')) {
+          _photoPaths.add(singlePath);
+          _mediaType = 'photo';
+        } else {
+          _videoPath = singlePath;
+          _mediaType = 'video';
+          _videoDuration = widget.videoDurationSeconds;
+          _initMiniVideoPlayer(_videoPath!);
+        }
       }
     }
   }
@@ -85,16 +92,19 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     setState(() => _isSaving = true);
 
     try {
-      String? savedPermanentPath;
+      List<String> savedPermanentPhotos = [];
+      String? savedPermanentVideoPath;
 
-      if (_mediaPath != null) {
-        if (_mediaType == 'video') {
-          savedPermanentPath =
-              await StorageService().persistVideo(_mediaPath!);
-        } else if (_mediaType == 'photo') {
-          savedPermanentPath =
-              await StorageService().persistPhoto(_mediaPath!);
-        }
+      if (_photoPaths.isNotEmpty) {
+        savedPermanentPhotos =
+            await StorageService().persistPhotos(_photoPaths);
+        _mediaType = 'photo';
+      } else if (_videoPath != null) {
+        savedPermanentVideoPath =
+            await StorageService().persistVideo(_videoPath!);
+        _mediaType = 'video';
+      } else {
+        _mediaType = 'text';
       }
 
       final activity = DailyActivity(
@@ -104,7 +114,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
         category: _selectedCategory,
         mood: _selectedMood['name']!,
         moodEmoji: _selectedMood['emoji']!,
-        mediaPath: savedPermanentPath,
+        mediaPath: savedPermanentVideoPath ??
+            (savedPermanentPhotos.isNotEmpty
+                ? savedPermanentPhotos.first
+                : null),
+        mediaPaths: savedPermanentPhotos,
         mediaType: _mediaType,
         videoDurationSeconds: _mediaType == 'video' ? _videoDuration : 0,
         createdAt: DateTime.now(),
@@ -113,6 +127,14 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       await DatabaseService().saveActivity(activity);
 
       if (mounted) {
+        final successMsg = _mediaType == 'photo'
+            ? (_photoPaths.length > 1
+                ? '${_photoPaths.length} photos added to daily journal!'
+                : 'Photo journal entry logged!')
+            : (_mediaType == 'video'
+                ? 'Daily vlog entry logged!'
+                : 'Activity logged!');
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFF10B981),
@@ -123,13 +145,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
               children: [
                 const Icon(Icons.check_circle_rounded, color: Colors.white),
                 const SizedBox(width: 10),
-                Text(
-                  _mediaType == 'photo'
-                      ? 'Photo journal entry logged!'
-                      : (_mediaType == 'video'
-                          ? 'Daily vlog entry logged!'
-                          : 'Activity logged!'),
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                Expanded(
+                  child: Text(
+                    successMsg,
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                  ),
                 ),
               ],
             ),
@@ -217,7 +237,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Media Preview Section (Photo or Video or Camera Action options)
+              // Media Section (Multi-Photo strip, Video preview, or Quick Actions)
               _buildMediaSection(),
 
               const SizedBox(height: 24),
@@ -329,8 +349,189 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   }
 
   Widget _buildMediaSection() {
-    if (_mediaPath != null) {
-      final file = File(_mediaPath!);
+    // 1. Multiple Photos Attached
+    if (_photoPaths.isNotEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'PHOTOS (${_photoPaths.length})',
+                style: GoogleFonts.outfit(
+                  color: const Color(0xFF94A3B8),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              GestureDetector(
+                onTap: () async {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => CameraRecorderScreen(
+                        initialMode: CameraMode.photo,
+                        existingPhotoPaths: _photoPaths,
+                      ),
+                    ),
+                  );
+                },
+                child: Row(
+                  children: [
+                    const Icon(Icons.add_a_photo_rounded,
+                        color: Color(0xFF818CF8), size: 16),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Add More',
+                      style: GoogleFonts.outfit(
+                        color: const Color(0xFF818CF8),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 180,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _photoPaths.length + 1,
+              itemBuilder: (context, index) {
+                if (index == _photoPaths.length) {
+                  // "+ Add Photo" button card at the end
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => CameraRecorderScreen(
+                            initialMode: CameraMode.photo,
+                            existingPhotoPaths: _photoPaths,
+                          ),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      width: 130,
+                      margin: const EdgeInsets.only(right: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFF6366F1).withValues(alpha: 0.4),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF6366F1)
+                                  .withValues(alpha: 0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.add_rounded,
+                                color: Color(0xFF818CF8), size: 24),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Add Photo',
+                            style: GoogleFonts.outfit(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                final path = _photoPaths[index];
+                return Container(
+                  width: 140,
+                  margin: const EdgeInsets.only(right: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E293B),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF334155)),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.file(
+                        File(path),
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => const Center(
+                          child: Icon(Icons.broken_image_rounded,
+                              color: Colors.white54),
+                        ),
+                      ),
+                      // Number Badge
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${index + 1}',
+                            style: GoogleFonts.outfit(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Remove Button
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _photoPaths.removeAt(index);
+                              if (_photoPaths.isEmpty) {
+                                _mediaType = 'text';
+                              }
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFEF4444),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.close_rounded,
+                                color: Colors.white, size: 14),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      );
+    }
+
+    // 2. Video Attached
+    if (_videoPath != null) {
       return Container(
         height: 220,
         width: double.infinity,
@@ -343,31 +544,20 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (_mediaType == 'video') ...[
-              if (_videoPlayerController != null &&
-                  _videoPlayerController!.value.isInitialized)
-                FittedBox(
-                  fit: BoxFit.cover,
-                  child: SizedBox(
-                    width: _videoPlayerController!.value.size.width,
-                    height: _videoPlayerController!.value.size.height,
-                    child: VideoPlayer(_videoPlayerController!),
-                  ),
-                )
-              else
-                const Center(
-                  child: CircularProgressIndicator(color: Color(0xFF6366F1)),
-                ),
-            ] else ...[
-              // Photo Preview
-              Image.file(
-                file,
+            if (_videoPlayerController != null &&
+                _videoPlayerController!.value.isInitialized)
+              FittedBox(
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => const Center(
-                  child: Icon(Icons.broken_image_rounded, color: Colors.white54),
+                child: SizedBox(
+                  width: _videoPlayerController!.value.size.width,
+                  height: _videoPlayerController!.value.size.height,
+                  child: VideoPlayer(_videoPlayerController!),
                 ),
+              )
+            else
+              const Center(
+                child: CircularProgressIndicator(color: Color(0xFF6366F1)),
               ),
-            ],
 
             // Top action buttons overlay
             Positioned(
@@ -375,7 +565,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
               right: 10,
               child: Row(
                 children: [
-                  // Type badge (Photo / Video duration)
+                  // Duration badge
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -386,18 +576,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          _mediaType == 'video'
-                              ? Icons.videocam_rounded
-                              : Icons.photo_camera_rounded,
-                          color: Colors.white,
-                          size: 14,
-                        ),
+                        const Icon(Icons.videocam_rounded,
+                            color: Colors.white, size: 14),
                         const SizedBox(width: 4),
                         Text(
-                          _mediaType == 'video'
-                              ? '${_videoDuration}s'
-                              : 'PHOTO',
+                          '${_videoDuration}s',
                           style: GoogleFonts.outfit(
                               color: Colors.white,
                               fontSize: 12,
@@ -407,11 +590,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // Remove media button
+                  // Remove video button
                   GestureDetector(
                     onTap: () {
                       setState(() {
-                        _mediaPath = null;
+                        _videoPath = null;
                         _mediaType = 'text';
                         _videoDuration = 0;
                         _videoPlayerController?.pause();
@@ -437,7 +620,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       );
     }
 
-    // No media attached: dual options to Take Photo or Record Vlog
+    // 3. No media attached: dual options to Take Photo(s) or Record Vlog
     return Row(
       children: [
         // Take Photo
@@ -475,11 +658,19 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Take Photo',
+                    'Snap Photos',
                     style: GoogleFonts.outfit(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Single or multiple',
+                    style: GoogleFonts.inter(
+                      color: const Color(0xFF94A3B8),
+                      fontSize: 11,
                     ),
                   ),
                 ],
@@ -528,6 +719,14 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Short vlog clip',
+                    style: GoogleFonts.inter(
+                      color: const Color(0xFF94A3B8),
+                      fontSize: 11,
                     ),
                   ),
                 ],

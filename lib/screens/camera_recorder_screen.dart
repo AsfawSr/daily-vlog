@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -9,10 +10,12 @@ enum CameraMode { video, photo }
 
 class CameraRecorderScreen extends StatefulWidget {
   final CameraMode initialMode;
+  final List<String>? existingPhotoPaths;
 
   const CameraRecorderScreen({
     super.key,
     this.initialMode = CameraMode.video,
+    this.existingPhotoPaths,
   });
 
   @override
@@ -26,11 +29,15 @@ class _CameraRecorderScreenState extends State<CameraRecorderScreen>
   bool _isCheckingPermissions = true;
   bool _isProcessingMedia = false;
   late CameraMode _currentMode;
+  final List<String> _capturedPhotos = [];
 
   @override
   void initState() {
     super.initState();
     _currentMode = widget.initialMode;
+    if (widget.existingPhotoPaths != null) {
+      _capturedPhotos.addAll(widget.existingPhotoPaths!);
+    }
     WidgetsBinding.instance.addObserver(this);
     _cameraService.addListener(_onCameraStateChanged);
     _checkAndInitCamera();
@@ -81,20 +88,32 @@ class _CameraRecorderScreenState extends State<CameraRecorderScreen>
 
   Future<void> _onShutterPressed() async {
     if (_currentMode == CameraMode.photo) {
-      // Take Photo
+      // Capture Photo (supports taking multiple photos)
       setState(() => _isProcessingMedia = true);
       final photoFile = await _cameraService.takePicture();
       setState(() => _isProcessingMedia = false);
 
       if (photoFile != null && mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => CreateActivityScreen(
-              initialMediaPath: photoFile.path,
-              mediaType: 'photo',
+        setState(() {
+          _capturedPhotos.add(photoFile.path);
+        });
+
+        // Haptic feedback & quick snackbar tip on first photo
+        if (_capturedPhotos.length == 1) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              duration: const Duration(seconds: 2),
+              backgroundColor: const Color(0xFF1E293B),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              content: Text(
+                'Photo captured! Snap more or tap "Next" when done.',
+                style: GoogleFonts.inter(fontSize: 13, color: Colors.white),
+              ),
             ),
-          ),
-        );
+          );
+        }
       }
     } else {
       // Video Recording
@@ -119,6 +138,18 @@ class _CameraRecorderScreenState extends State<CameraRecorderScreen>
         }
       }
     }
+  }
+
+  void _finishPhotosAndProceed() {
+    if (_capturedPhotos.isEmpty) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => CreateActivityScreen(
+          initialPhotoPaths: _capturedPhotos,
+          mediaType: 'photo',
+        ),
+      ),
+    );
   }
 
   @override
@@ -186,7 +217,7 @@ class _CameraRecorderScreenState extends State<CameraRecorderScreen>
             left: 0,
             right: 0,
             child: Container(
-              height: 220,
+              height: 230,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.bottomCenter,
@@ -217,6 +248,8 @@ class _CameraRecorderScreenState extends State<CameraRecorderScreen>
                       onPressed: () {
                         if (_cameraService.isRecording) {
                           _showExitConfirmDialog();
+                        } else if (_capturedPhotos.isNotEmpty) {
+                          _finishPhotosAndProceed();
                         } else {
                           Navigator.of(context).pop();
                         }
@@ -267,7 +300,9 @@ class _CameraRecorderScreenState extends State<CameraRecorderScreen>
                     else
                       Text(
                         _currentMode == CameraMode.photo
-                            ? 'DAY VLOG PHOTO'
+                            ? (_capturedPhotos.isEmpty
+                                ? 'DAY VLOG PHOTO'
+                                : 'PHOTO (${_capturedPhotos.length} TAKEN)')
                             : 'DAY VLOG VIDEO',
                         style: GoogleFonts.outfit(
                           color: Colors.white.withValues(alpha: 0.85),
@@ -301,14 +336,14 @@ class _CameraRecorderScreenState extends State<CameraRecorderScreen>
             child: Align(
               alignment: Alignment.bottomCenter,
               child: Padding(
-                padding: const EdgeInsets.only(bottom: 20.0, left: 24, right: 24),
+                padding: const EdgeInsets.only(bottom: 20.0, left: 20, right: 20),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // Mode Selector Bar (PHOTO / VIDEO)
                     if (!_cameraService.isRecording)
                       Container(
-                        margin: const EdgeInsets.only(bottom: 20),
+                        margin: const EdgeInsets.only(bottom: 16),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 4),
                         decoration: BoxDecoration(
@@ -327,41 +362,77 @@ class _CameraRecorderScreenState extends State<CameraRecorderScreen>
                         ),
                       ),
 
-                    // Shutter & Side Actions Row
+                    // Shutter & Multi-Photo Action Controls
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Left Action: Pause/Resume (when recording) OR Quick Note
-                        if (_cameraService.isRecording)
-                          IconButton(
-                            iconSize: 32,
-                            icon: Icon(
-                              _cameraService.isPaused
-                                  ? Icons.play_arrow_rounded
-                                  : Icons.pause_rounded,
-                              color: Colors.white,
-                            ),
-                            onPressed: _cameraService.isPaused
-                                ? _cameraService.resumeRecording
-                                : _cameraService.pauseRecording,
-                          )
-                        else
-                          IconButton(
-                            iconSize: 28,
-                            icon: const Icon(Icons.edit_note_rounded,
-                                color: Colors.white70),
-                            tooltip: 'Log note without camera',
-                            onPressed: () {
-                              Navigator.of(context).pushReplacement(
-                                MaterialPageRoute(
-                                  builder: (_) => const CreateActivityScreen(),
+                        // Left Action:
+                        // If taking photos & photos exist: thumbnail preview with counter
+                        // Else: Lens flip or Note button
+                        SizedBox(
+                          width: 64,
+                          height: 64,
+                          child: _currentMode == CameraMode.photo &&
+                                  _capturedPhotos.isNotEmpty
+                              ? GestureDetector(
+                                  onTap: _finishPhotosAndProceed,
+                                  child: Stack(
+                                    children: [
+                                      Container(
+                                        width: 56,
+                                        height: 56,
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          border: Border.all(
+                                              color: Colors.white, width: 2),
+                                          image: DecorationImage(
+                                            image: FileImage(
+                                                File(_capturedPhotos.last)),
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        top: 0,
+                                        right: 4,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: const BoxDecoration(
+                                            color: Color(0xFF6366F1),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Text(
+                                            '${_capturedPhotos.length}',
+                                            style: GoogleFonts.outfit(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : IconButton(
+                                  iconSize: 28,
+                                  icon: const Icon(Icons.edit_note_rounded,
+                                      color: Colors.white70),
+                                  tooltip: 'Log note without camera',
+                                  onPressed: () {
+                                    Navigator.of(context).pushReplacement(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const CreateActivityScreen(),
+                                      ),
+                                    );
+                                  },
                                 ),
-                              );
-                            },
-                          ),
+                        ),
 
-                        // Shutter / Capture Button
+                        // Center Shutter Button
                         GestureDetector(
                           onTap: _isProcessingMedia ? null : _onShutterPressed,
                           child: Container(
@@ -406,14 +477,34 @@ class _CameraRecorderScreenState extends State<CameraRecorderScreen>
                           ),
                         ),
 
-                        // Switch Camera Lens (Front / Rear)
-                        IconButton(
-                          iconSize: 32,
-                          icon: const Icon(Icons.flip_camera_ios_rounded,
-                              color: Colors.white),
-                          onPressed: _cameraService.isRecording
-                              ? null
-                              : _cameraService.toggleCamera,
+                        // Right Action:
+                        // If photos captured: Next / Done button
+                        // Else: Lens Switcher
+                        SizedBox(
+                          width: 64,
+                          height: 64,
+                          child: _currentMode == CameraMode.photo &&
+                                  _capturedPhotos.isNotEmpty
+                              ? IconButton(
+                                  icon: Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF6366F1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.arrow_forward_rounded,
+                                        color: Colors.white, size: 20),
+                                  ),
+                                  onPressed: _finishPhotosAndProceed,
+                                )
+                              : IconButton(
+                                  iconSize: 32,
+                                  icon: const Icon(Icons.flip_camera_ios_rounded,
+                                      color: Colors.white),
+                                  onPressed: _cameraService.isRecording
+                                      ? null
+                                      : _cameraService.toggleCamera,
+                                ),
                         ),
                       ],
                     ),

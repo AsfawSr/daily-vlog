@@ -8,19 +8,44 @@ import '../services/database_service.dart';
 
 class PhotoViewerScreen extends StatefulWidget {
   final DailyActivity activity;
+  final int initialIndex;
 
-  const PhotoViewerScreen({super.key, required this.activity});
+  const PhotoViewerScreen({
+    super.key,
+    required this.activity,
+    this.initialIndex = 0,
+  });
 
   @override
   State<PhotoViewerScreen> createState() => _PhotoViewerScreenState();
 }
 
 class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
+  late PageController _pageController;
+  late int _currentIndex;
   bool _isSavingToGallery = false;
 
-  Future<void> _saveToGallery() async {
-    if (widget.activity.mediaPath == null) return;
-    final file = File(widget.activity.mediaPath!);
+  List<String> get _photos => widget.activity.photoPaths.isNotEmpty
+      ? widget.activity.photoPaths
+      : (widget.activity.mediaPath != null ? [widget.activity.mediaPath!] : []);
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: _currentIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveCurrentPhotoToGallery() async {
+    if (_photos.isEmpty) return;
+    final currentPath = _photos[_currentIndex];
+    final file = File(currentPath);
     if (!await file.exists()) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -39,7 +64,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       if (!hasAccess) {
         await Gal.requestAccess();
       }
-      await Gal.putImage(widget.activity.mediaPath!, album: 'Day Vlog');
+      await Gal.putImage(currentPath, album: 'Day Vlog');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -54,7 +79,9 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Photo saved to your Gallery album "Day Vlog"!',
+                    _photos.length > 1
+                        ? 'Photo ${_currentIndex + 1} saved to "Day Vlog" album!'
+                        : 'Photo saved to "Day Vlog" album!',
                     style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -86,13 +113,65 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
     }
   }
 
+  Future<void> _saveAllPhotosToGallery() async {
+    if (_photos.isEmpty) return;
+
+    setState(() => _isSavingToGallery = true);
+    try {
+      final hasAccess = await Gal.hasAccess();
+      if (!hasAccess) {
+        await Gal.requestAccess();
+      }
+
+      int savedCount = 0;
+      for (final path in _photos) {
+        final file = File(path);
+        if (await file.exists()) {
+          await Gal.putImage(path, album: 'Day Vlog');
+          savedCount++;
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'All $savedCount photos saved to Gallery "Day Vlog" album!',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFEF4444),
+            content: Text('Error exporting photos: $e'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingToGallery = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final formattedDate =
         DateFormat('EEEE, MMM d, y • h:mm a').format(widget.activity.createdAt);
-    final photoFile = widget.activity.mediaPath != null
-        ? File(widget.activity.mediaPath!)
-        : null;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -104,13 +183,26 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
               color: Colors.white, size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text(
-          widget.activity.title,
-          style: GoogleFonts.outfit(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-            fontSize: 18,
-          ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.activity.title,
+              style: GoogleFonts.outfit(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
+              ),
+            ),
+            if (_photos.length > 1)
+              Text(
+                'Photo ${_currentIndex + 1} of ${_photos.length}',
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF94A3B8),
+                  fontSize: 12,
+                ),
+              ),
+          ],
         ),
         actions: [
           // Save Photo to Gallery Button
@@ -125,7 +217,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
                   )
                 : const Icon(Icons.file_download_outlined,
                     color: Colors.white, size: 24),
-            onPressed: _isSavingToGallery ? null : _saveToGallery,
+            onPressed: _isSavingToGallery ? null : _saveCurrentPhotoToGallery,
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline_rounded,
@@ -137,34 +229,91 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Interactive Photo Viewport with Pinch to Zoom
+            // Swipeable Photo Carousel with Pinch-to-Zoom
             Expanded(
-              child: Center(
-                child: photoFile != null && photoFile.existsSync()
-                    ? InteractiveViewer(
-                        minScale: 0.8,
-                        maxScale: 4.0,
-                        child: Image.file(
-                          photoFile,
-                          fit: BoxFit.contain,
-                        ),
-                      )
-                    : Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.broken_image_rounded,
-                              color: Colors.white54, size: 54),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Photo file not found on disk',
-                            style: GoogleFonts.inter(color: Colors.white70),
-                          ),
-                        ],
+              child: _photos.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No photos found in this entry',
+                        style: GoogleFonts.inter(color: Colors.white70),
                       ),
-              ),
+                    )
+                  : Stack(
+                      alignment: Alignment.bottomCenter,
+                      children: [
+                        PageView.builder(
+                          controller: _pageController,
+                          itemCount: _photos.length,
+                          onPageChanged: (index) {
+                            setState(() => _currentIndex = index);
+                          },
+                          itemBuilder: (context, index) {
+                            final file = File(_photos[index]);
+                            return Center(
+                              child: file.existsSync()
+                                  ? InteractiveViewer(
+                                      minScale: 0.8,
+                                      maxScale: 4.0,
+                                      child: Image.file(
+                                        file,
+                                        fit: BoxFit.contain,
+                                      ),
+                                    )
+                                  : Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(Icons.broken_image_rounded,
+                                            color: Colors.white54, size: 54),
+                                        const SizedBox(height: 12),
+                                        Text(
+                                          'Photo file missing on disk',
+                                          style: GoogleFonts.inter(
+                                              color: Colors.white70),
+                                        ),
+                                      ],
+                                    ),
+                            );
+                          },
+                        ),
+
+                        // Carousel Dots Indicator (if > 1 photo)
+                        if (_photos.length > 1)
+                          Positioned(
+                            bottom: 12,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.6),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: List.generate(_photos.length, (i) {
+                                  final isActive = i == _currentIndex;
+                                  return AnimatedContainer(
+                                    duration: const Duration(milliseconds: 200),
+                                    margin: const EdgeInsets.symmetric(
+                                        horizontal: 3),
+                                    width: isActive ? 16 : 6,
+                                    height: 6,
+                                    decoration: BoxDecoration(
+                                      color: isActive
+                                          ? const Color(0xFF6366F1)
+                                          : Colors.white38,
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
             ),
 
-            // Metadata & Details Section with Export Button
+            // Metadata & Details Section with Export Buttons
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20.0),
@@ -238,43 +387,107 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
                     ),
                   ],
                   const SizedBox(height: 16),
-                  // Save Photo to Gallery Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: BorderSide(
-                          color:
-                              const Color(0xFF3B82F6).withValues(alpha: 0.6),
+                  // Save Buttons Row
+                  if (_photos.length > 1)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: BorderSide(
+                                color: const Color(0xFF3B82F6)
+                                    .withValues(alpha: 0.6),
+                              ),
+                              backgroundColor: const Color(0xFF3B82F6)
+                                  .withValues(alpha: 0.12),
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            icon: const Icon(Icons.download_rounded, size: 18),
+                            label: Text(
+                              'Save Current',
+                              style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                            onPressed: _isSavingToGallery
+                                ? null
+                                : _saveCurrentPhotoToGallery,
+                          ),
                         ),
-                        backgroundColor:
-                            const Color(0xFF3B82F6).withValues(alpha: 0.12),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF6366F1),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            icon: const Icon(Icons.photo_library_rounded,
+                                size: 18),
+                            label: Text(
+                              'Save All (${_photos.length})',
+                              style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                            onPressed: _isSavingToGallery
+                                ? null
+                                : _saveAllPhotosToGallery,
+                          ),
                         ),
+                      ],
+                    )
+                  else
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: BorderSide(
+                            color:
+                                const Color(0xFF3B82F6).withValues(alpha: 0.6),
+                          ),
+                          backgroundColor:
+                              const Color(0xFF3B82F6).withValues(alpha: 0.12),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: _isSavingToGallery
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.download_rounded, size: 18),
+                        label: Text(
+                          _isSavingToGallery
+                              ? 'Saving to Gallery...'
+                              : 'Save Photo to Phone Gallery',
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                        onPressed: _isSavingToGallery
+                            ? null
+                            : _saveCurrentPhotoToGallery,
                       ),
-                      icon: _isSavingToGallery
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Icon(Icons.download_rounded, size: 18),
-                      label: Text(
-                        _isSavingToGallery
-                            ? 'Saving to Gallery...'
-                            : 'Save Photo to Phone Gallery',
-                        style: GoogleFonts.outfit(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                      onPressed: _isSavingToGallery ? null : _saveToGallery,
                     ),
-                  ),
                 ],
               ),
             ),
@@ -292,7 +505,7 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
         title: Text('Delete Photo Entry?',
             style: GoogleFonts.outfit(color: Colors.white)),
         content: Text(
-          'This will permanently delete this photo journal entry and image file.',
+          'This will permanently delete this photo journal entry and image file(s).',
           style: GoogleFonts.inter(color: Colors.white70),
         ),
         actions: [
