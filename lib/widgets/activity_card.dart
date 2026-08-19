@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:gal/gal.dart';
 import '../models/activity_model.dart';
 import '../screens/video_player_screen.dart';
 import '../services/database_service.dart';
@@ -127,18 +128,33 @@ class ActivityCard extends StatelessWidget {
                       ),
                     ),
 
-                    // More Menu (Delete)
+                    // More Menu (Save to Gallery & Delete)
                     PopupMenuButton<String>(
                       icon: const Icon(Icons.more_vert_rounded,
                           color: Color(0xFF64748B), size: 18),
                       padding: EdgeInsets.zero,
                       color: const Color(0xFF0F172A),
                       onSelected: (val) {
-                        if (val == 'delete') {
+                        if (val == 'download') {
+                          _saveVideoToGallery(context);
+                        } else if (val == 'delete') {
                           _confirmDelete(context);
                         }
                       },
                       itemBuilder: (ctx) => [
+                        if (hasVideo)
+                          const PopupMenuItem(
+                            value: 'download',
+                            child: Row(
+                              children: [
+                                Icon(Icons.file_download_outlined,
+                                    color: Color(0xFF818CF8), size: 18),
+                                SizedBox(width: 8),
+                                Text('Save to Gallery',
+                                    style: TextStyle(color: Colors.white)),
+                              ],
+                            ),
+                          ),
                         const PopupMenuItem(
                           value: 'delete',
                           child: Row(
@@ -310,5 +326,69 @@ class ActivityCard extends StatelessWidget {
         ],
       ),
     );
+  }
+  Future<void> _saveVideoToGallery(BuildContext context) async {
+    if (activity.videoPath == null) return;
+    final file = File(activity.videoPath!);
+    if (!await file.exists()) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Color(0xFFEF4444),
+            content: Text('Video file not found on disk.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      final hasAccess = await Gal.hasAccess();
+      if (!hasAccess) {
+        await Gal.requestAccess();
+      }
+      await Gal.putVideo(activity.videoPath!, album: 'Day Vlog');
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Saved "${activity.title}" video to Gallery!',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } on GalException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFEF4444),
+            content: Text('Failed to save to gallery: ${e.type.message}'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFEF4444),
+            content: Text('Error saving to gallery: $e'),
+          ),
+        );
+      }
+    }
   }
 }
