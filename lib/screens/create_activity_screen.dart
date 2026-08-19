@@ -9,12 +9,16 @@ import '../services/storage_service.dart';
 import 'camera_recorder_screen.dart';
 
 class CreateActivityScreen extends StatefulWidget {
+  final String? initialMediaPath;
   final String? initialVideoPath;
+  final String mediaType; // 'video', 'photo', or 'text'
   final int videoDurationSeconds;
 
   const CreateActivityScreen({
     super.key,
+    this.initialMediaPath,
     this.initialVideoPath,
+    this.mediaType = 'text',
     this.videoDurationSeconds = 0,
   });
 
@@ -27,7 +31,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
 
-  String? _videoPath;
+  String? _mediaPath;
+  String _mediaType = 'text';
   int _videoDuration = 0;
   VideoPlayerController? _videoPlayerController;
   bool _isSaving = false;
@@ -46,11 +51,19 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
         ? initialMoods.first
         : {'name': 'Happy', 'emoji': '😊'};
 
-    _videoPath = widget.initialVideoPath;
+    _mediaPath = widget.initialMediaPath ?? widget.initialVideoPath;
     _videoDuration = widget.videoDurationSeconds;
 
-    if (_videoPath != null) {
-      _initMiniVideoPlayer(_videoPath!);
+    if (_mediaPath != null) {
+      if (widget.mediaType != 'text') {
+        _mediaType = widget.mediaType;
+      } else {
+        _mediaType = _mediaPath!.endsWith('.mp4') ? 'video' : 'photo';
+      }
+
+      if (_mediaType == 'video') {
+        _initMiniVideoPlayer(_mediaPath!);
+      }
     }
   }
 
@@ -58,9 +71,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     _videoPlayerController?.dispose();
     _videoPlayerController = VideoPlayerController.file(File(path))
       ..initialize().then((_) {
-        setState(() {});
-        _videoPlayerController?.setLooping(true);
-        _videoPlayerController?.play();
+        if (mounted) {
+          setState(() {});
+          _videoPlayerController?.setLooping(true);
+          _videoPlayerController?.play();
+        }
       });
   }
 
@@ -70,12 +85,16 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     setState(() => _isSaving = true);
 
     try {
-      String? savedPermanentVideoPath;
+      String? savedPermanentPath;
 
-      if (_videoPath != null) {
-        // Persist video to permanent app documents folder
-        savedPermanentVideoPath =
-            await StorageService().persistVideo(_videoPath!);
+      if (_mediaPath != null) {
+        if (_mediaType == 'video') {
+          savedPermanentPath =
+              await StorageService().persistVideo(_mediaPath!);
+        } else if (_mediaType == 'photo') {
+          savedPermanentPath =
+              await StorageService().persistPhoto(_mediaPath!);
+        }
       }
 
       final activity = DailyActivity(
@@ -85,8 +104,9 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
         category: _selectedCategory,
         mood: _selectedMood['name']!,
         moodEmoji: _selectedMood['emoji']!,
-        videoPath: savedPermanentVideoPath,
-        videoDurationSeconds: _videoDuration,
+        mediaPath: savedPermanentPath,
+        mediaType: _mediaType,
+        videoDurationSeconds: _mediaType == 'video' ? _videoDuration : 0,
         createdAt: DateTime.now(),
       );
 
@@ -97,12 +117,18 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
           SnackBar(
             backgroundColor: const Color(0xFF10B981),
             behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             content: Row(
               children: [
                 const Icon(Icons.check_circle_rounded, color: Colors.white),
                 const SizedBox(width: 10),
                 Text(
-                  'Daily vlog entry logged successfully!',
+                  _mediaType == 'photo'
+                      ? 'Photo journal entry logged!'
+                      : (_mediaType == 'video'
+                          ? 'Daily vlog entry logged!'
+                          : 'Activity logged!'),
                   style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                 ),
               ],
@@ -191,8 +217,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Video Preview Banner / Record Video Button
-              _buildVideoPreviewSection(),
+              // Media Preview Section (Photo or Video or Camera Action options)
+              _buildMediaSection(),
 
               const SizedBox(height: 24),
 
@@ -302,8 +328,9 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     );
   }
 
-  Widget _buildVideoPreviewSection() {
-    if (_videoPath != null) {
+  Widget _buildMediaSection() {
+    if (_mediaPath != null) {
+      final file = File(_mediaPath!);
       return Container(
         height: 220,
         width: double.infinity,
@@ -316,20 +343,31 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (_videoPlayerController != null &&
-                _videoPlayerController!.value.isInitialized)
-              FittedBox(
-                fit: BoxFit.cover,
-                child: SizedBox(
-                  width: _videoPlayerController!.value.size.width,
-                  height: _videoPlayerController!.value.size.height,
-                  child: VideoPlayer(_videoPlayerController!),
+            if (_mediaType == 'video') ...[
+              if (_videoPlayerController != null &&
+                  _videoPlayerController!.value.isInitialized)
+                FittedBox(
+                  fit: BoxFit.cover,
+                  child: SizedBox(
+                    width: _videoPlayerController!.value.size.width,
+                    height: _videoPlayerController!.value.size.height,
+                    child: VideoPlayer(_videoPlayerController!),
+                  ),
+                )
+              else
+                const Center(
+                  child: CircularProgressIndicator(color: Color(0xFF6366F1)),
                 ),
-              )
-            else
-              const Center(
-                child: CircularProgressIndicator(color: Color(0xFF6366F1)),
+            ] else ...[
+              // Photo Preview
+              Image.file(
+                file,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => const Center(
+                  child: Icon(Icons.broken_image_rounded, color: Colors.white54),
+                ),
               ),
+            ],
 
             // Top action buttons overlay
             Positioned(
@@ -337,7 +375,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
               right: 10,
               child: Row(
                 children: [
-                  // Duration badge
+                  // Type badge (Photo / Video duration)
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -348,11 +386,18 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.videocam_rounded,
-                            color: Colors.white, size: 14),
+                        Icon(
+                          _mediaType == 'video'
+                              ? Icons.videocam_rounded
+                              : Icons.photo_camera_rounded,
+                          color: Colors.white,
+                          size: 14,
+                        ),
                         const SizedBox(width: 4),
                         Text(
-                          '${_videoDuration}s',
+                          _mediaType == 'video'
+                              ? '${_videoDuration}s'
+                              : 'PHOTO',
                           style: GoogleFonts.outfit(
                               color: Colors.white,
                               fontSize: 12,
@@ -362,11 +407,12 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // Remove video button
+                  // Remove media button
                   GestureDetector(
                     onTap: () {
                       setState(() {
-                        _videoPath = null;
+                        _mediaPath = null;
+                        _mediaType = 'text';
                         _videoDuration = 0;
                         _videoPlayerController?.pause();
                         _videoPlayerController?.dispose();
@@ -391,68 +437,105 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
       );
     }
 
-    // No video attached: button to record
-    return InkWell(
-      onTap: () async {
-        final result = await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const CameraRecorderScreen()),
-        );
-        if (result != null && result is String) {
-          setState(() {
-            _videoPath = result;
-          });
-          _initMiniVideoPlayer(_videoPath!);
-        }
-      },
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E293B).withValues(alpha: 0.6),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: const Color(0xFF6366F1).withValues(alpha: 0.4),
-            style: BorderStyle.solid,
-            width: 1.5,
+    // No media attached: dual options to Take Photo or Record Vlog
+    return Row(
+      children: [
+        // Take Photo
+        Expanded(
+          child: InkWell(
+            onTap: () async {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      const CameraRecorderScreen(initialMode: CameraMode.photo),
+                ),
+              );
+            },
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B).withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: const Color(0xFF334155),
+                  width: 1.2,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3B82F6).withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.photo_camera_rounded,
+                        color: Color(0xFF60A5FA), size: 24),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Take Photo',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
+        const SizedBox(width: 12),
+        // Record Video
+        Expanded(
+          child: InkWell(
+            onTap: () async {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      const CameraRecorderScreen(initialMode: CameraMode.video),
+                ),
+              );
+            },
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
               decoration: BoxDecoration(
-                color: const Color(0xFF6366F1).withValues(alpha: 0.2),
-                shape: BoxShape.circle,
+                color: const Color(0xFF1E293B).withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: const Color(0xFF6366F1).withValues(alpha: 0.4),
+                  width: 1.2,
+                ),
               ),
-              child: const Icon(Icons.videocam_rounded,
-                  color: Color(0xFF818CF8), size: 28),
-            ),
-            const SizedBox(width: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Record Vlog Video Clip',
-                  style: GoogleFonts.outfit(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6366F1).withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.videocam_rounded,
+                        color: Color(0xFF818CF8), size: 24),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Tap to open camera and record',
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF94A3B8),
-                    fontSize: 13,
+                  const SizedBox(height: 10),
+                  Text(
+                    'Record Video',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -911,4 +994,3 @@ class _CreateActivityScreenState extends State<CreateActivityScreen> {
     );
   }
 }
-

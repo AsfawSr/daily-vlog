@@ -249,7 +249,7 @@ class _HomeTimelineScreenState extends State<HomeTimelineScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Record Your Day',
+                'Capture Your Day',
                 style: GoogleFonts.outfit(
                   color: Colors.white,
                   fontSize: 20,
@@ -288,7 +288,7 @@ class _HomeTimelineScreenState extends State<HomeTimelineScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Record a short video clip or write notes about your daily activity.',
+            'Record a vlog clip, take a photo, or write thoughts about your day.',
             style: GoogleFonts.inter(
               color: Colors.white.withValues(alpha: 0.85),
               fontSize: 13,
@@ -310,9 +310,9 @@ class _HomeTimelineScreenState extends State<HomeTimelineScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  icon: const Icon(Icons.videocam_rounded, size: 20),
+                  icon: const Icon(Icons.camera_alt_rounded, size: 20),
                   label: Text(
-                    'Record Vlog',
+                    'Open Camera',
                     style: GoogleFonts.outfit(
                       fontWeight: FontWeight.w700,
                       fontSize: 15,

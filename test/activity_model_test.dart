@@ -63,5 +63,32 @@ void main() {
       expect(updated.category, 'Coding');
       expect(updated.mood, 'Happy');
     });
+
+    test('Photo media serialization and deserialization works correctly', () {
+      final photoActivity = DailyActivity(
+        id: 'photo-1',
+        title: 'Sunset View',
+        description: 'Golden hour at the lake',
+        category: 'Life',
+        mood: 'Calm',
+        moodEmoji: '😌',
+        mediaPath: '/data/user/0/com.dailyvlog.app/app_flutter/photo_123.jpg',
+        mediaType: 'photo',
+        createdAt: DateTime.now(),
+      );
+
+      expect(photoActivity.hasPhoto, isTrue);
+      expect(photoActivity.hasVideo, isFalse);
+      expect(photoActivity.photoPath, contains('photo_123.jpg'));
+
+      final map = photoActivity.toMap();
+      expect(map['mediaType'], 'photo');
+      expect(map['mediaPath'], contains('photo_123.jpg'));
+
+      final restored = DailyActivity.fromMap(map);
+      expect(restored.hasPhoto, isTrue);
+      expect(restored.mediaType, 'photo');
+      expect(restored.mediaPath, contains('photo_123.jpg'));
+    });
   });
 }

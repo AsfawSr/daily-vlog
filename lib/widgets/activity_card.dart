@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:gal/gal.dart';
 import '../models/activity_model.dart';
 import '../screens/video_player_screen.dart';
+import '../screens/photo_viewer_screen.dart';
 import '../services/database_service.dart';
 
 class ActivityCard extends StatelessWidget {
@@ -23,11 +24,17 @@ class ActivityCard extends StatelessWidget {
       case 'creative':
         return const Color(0xFFEC4899);
       case 'travel':
-        return const Color(0xFFF59E0B);
-      case 'food':
         return const Color(0xFF10B981);
+      case 'food':
+        return const Color(0xFFF59E0B);
       case 'coding':
         return const Color(0xFF06B6D4);
+      case 'life':
+        return const Color(0xFF14B8A6);
+      case 'morning routine':
+        return const Color(0xFFF97316);
+      case 'reading':
+        return const Color(0xFF6366F1);
       default:
         return const Color(0xFF6366F1);
     }
@@ -35,18 +42,21 @@ class ActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final timeStr = DateFormat('h:mm a').format(activity.createdAt);
-    final hasVideo = activity.videoPath != null &&
-        activity.videoPath!.isNotEmpty &&
-        File(activity.videoPath!).existsSync();
     final catColor = _getCategoryColor(activity.category);
+    final hasVideo = activity.hasVideo;
+    final hasPhoto = activity.hasPhoto;
+    final hasMedia = activity.hasMedia;
+    final formattedTime = DateFormat('h:mm a').format(activity.createdAt);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14.0),
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF334155).withValues(alpha: 0.6)),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF334155).withValues(alpha: 0.8),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.2),
@@ -64,6 +74,12 @@ class ActivityCard extends StatelessWidget {
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => VideoPlayerScreen(activity: activity),
+                ),
+              );
+            } else if (hasPhoto) {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => PhotoViewerScreen(activity: activity),
                 ),
               );
             } else {
@@ -109,8 +125,8 @@ class ActivityCard extends StatelessWidget {
                       child: Text(
                         '${activity.moodEmoji} ${activity.mood}',
                         style: GoogleFonts.inter(
-                          color: const Color(0xFF94A3B8),
-                          fontSize: 11,
+                          color: Colors.white70,
+                          fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -118,9 +134,9 @@ class ActivityCard extends StatelessWidget {
 
                     const Spacer(),
 
-                    // Time
+                    // Timestamp
                     Text(
-                      timeStr,
+                      formattedTime,
                       style: GoogleFonts.inter(
                         color: const Color(0xFF64748B),
                         fontSize: 12,
@@ -136,22 +152,24 @@ class ActivityCard extends StatelessWidget {
                       color: const Color(0xFF0F172A),
                       onSelected: (val) {
                         if (val == 'download') {
-                          _saveVideoToGallery(context);
+                          _saveMediaToGallery(context);
                         } else if (val == 'delete') {
                           _confirmDelete(context);
                         }
                       },
                       itemBuilder: (ctx) => [
-                        if (hasVideo)
-                          const PopupMenuItem(
+                        if (hasMedia)
+                          PopupMenuItem(
                             value: 'download',
                             child: Row(
                               children: [
-                                Icon(Icons.file_download_outlined,
+                                const Icon(Icons.file_download_outlined,
                                     color: Color(0xFF818CF8), size: 18),
-                                SizedBox(width: 8),
-                                Text('Save to Gallery',
-                                    style: TextStyle(color: Colors.white)),
+                                const SizedBox(width: 8),
+                                Text(
+                                  hasPhoto ? 'Save Photo' : 'Save Video',
+                                  style: const TextStyle(color: Colors.white),
+                                ),
                               ],
                             ),
                           ),
@@ -200,7 +218,7 @@ class ActivityCard extends StatelessWidget {
 
                 const SizedBox(height: 14),
 
-                // Video Indicator / Player CTA Bar
+                // Media Indicator Bar (Video or Photo)
                 if (hasVideo)
                   Container(
                     padding:
@@ -249,6 +267,42 @@ class ActivityCard extends StatelessWidget {
                             color: Color(0xFF64748B), size: 12),
                       ],
                     ),
+                  )
+                else if (hasPhoto)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: const Color(0xFF3B82F6).withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF3B82F6),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.photo_camera_rounded,
+                              color: Colors.white, size: 16),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'View Photo Memory',
+                          style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const Spacer(),
+                        const Icon(Icons.arrow_forward_ios_rounded,
+                            color: Color(0xFF64748B), size: 12),
+                      ],
+                    ),
                   ),
               ],
             ),
@@ -264,24 +318,34 @@ class ActivityCard extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E293B),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Text(activity.title,
-            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Row(
+          children: [
+            Text(activity.moodEmoji, style: const TextStyle(fontSize: 22)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                activity.title,
+                style: GoogleFonts.outfit(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text('${activity.moodEmoji} ${activity.mood}',
-                    style: const TextStyle(color: Colors.white70)),
-                const SizedBox(width: 8),
-                Text('•', style: TextStyle(color: Colors.white.withValues(alpha: 0.4))),
-                const SizedBox(width: 8),
-                Text(activity.category,
-                    style: const TextStyle(color: Color(0xFF818CF8))),
-              ],
+            Text(
+              '${activity.category} • ${activity.mood}',
+              style: GoogleFonts.outfit(
+                color: const Color(0xFF818CF8),
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Text(
               activity.description.isNotEmpty
                   ? activity.description
@@ -327,15 +391,16 @@ class ActivityCard extends StatelessWidget {
       ),
     );
   }
-  Future<void> _saveVideoToGallery(BuildContext context) async {
-    if (activity.videoPath == null) return;
-    final file = File(activity.videoPath!);
+
+  Future<void> _saveMediaToGallery(BuildContext context) async {
+    if (activity.mediaPath == null) return;
+    final file = File(activity.mediaPath!);
     if (!await file.exists()) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Color(0xFFEF4444),
-            content: Text('Video file not found on disk.'),
+            content: Text('Media file not found on disk.'),
           ),
         );
       }
@@ -347,7 +412,12 @@ class ActivityCard extends StatelessWidget {
       if (!hasAccess) {
         await Gal.requestAccess();
       }
-      await Gal.putVideo(activity.videoPath!, album: 'Day Vlog');
+
+      if (activity.hasPhoto) {
+        await Gal.putImage(activity.mediaPath!, album: 'Day Vlog');
+      } else {
+        await Gal.putVideo(activity.mediaPath!, album: 'Day Vlog');
+      }
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -362,7 +432,7 @@ class ActivityCard extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Saved "${activity.title}" video to Gallery!',
+                    'Saved "${activity.title}" to Gallery album "Day Vlog"!',
                     style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                   ),
                 ),

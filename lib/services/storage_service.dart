@@ -18,6 +18,16 @@ class StorageService {
     return videoDir;
   }
 
+  /// Gets or creates the dedicated directory for storing daily photos
+  Future<Directory> getPhotoDirectory() async {
+    final appDocDir = await getApplicationDocumentsDirectory();
+    final photoDir = Directory(p.join(appDocDir.path, 'daily_photos'));
+    if (!await photoDir.exists()) {
+      await photoDir.create(recursive: true);
+    }
+    return photoDir;
+  }
+
   /// Saves a recorded temporary video into persistent storage and returns permanent file path
   Future<String> persistVideo(String tempVideoPath) async {
     final videoDir = await getVideoDirectory();
@@ -32,7 +42,6 @@ class StorageService {
     final tempFile = File(tempVideoPath);
     if (await tempFile.exists()) {
       await tempFile.copy(permanentPath);
-      // Clean up temp file safely
       try {
         await tempFile.delete();
       } catch (_) {}
@@ -42,8 +51,31 @@ class StorageService {
     }
   }
 
-  /// Deletes a video file from disk safely
-  Future<bool> deleteVideo(String? filePath) async {
+  /// Saves a captured photo into persistent storage and returns permanent file path
+  Future<String> persistPhoto(String tempPhotoPath) async {
+    final photoDir = await getPhotoDirectory();
+    final uniqueId = const Uuid().v4().substring(0, 8);
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final extension = p.extension(tempPhotoPath).isNotEmpty
+        ? p.extension(tempPhotoPath)
+        : '.jpg';
+    final permanentFileName = 'photo_${timestamp}_$uniqueId$extension';
+    final permanentPath = p.join(photoDir.path, permanentFileName);
+
+    final tempFile = File(tempPhotoPath);
+    if (await tempFile.exists()) {
+      await tempFile.copy(permanentPath);
+      try {
+        await tempFile.delete();
+      } catch (_) {}
+      return permanentPath;
+    } else {
+      throw Exception("Temporary photo file does not exist at $tempPhotoPath");
+    }
+  }
+
+  /// Deletes a media file (video or photo) from disk safely
+  Future<bool> deleteMedia(String? filePath) async {
     if (filePath == null || filePath.isEmpty) return false;
     try {
       final file = File(filePath);
@@ -56,6 +88,9 @@ class StorageService {
     }
     return false;
   }
+
+  /// Alias for deleteMedia for backward compatibility
+  Future<bool> deleteVideo(String? filePath) => deleteMedia(filePath);
 
   /// Returns file size in readable format (e.g. 14.2 MB)
   Future<String> getFormattedFileSize(String filePath) async {

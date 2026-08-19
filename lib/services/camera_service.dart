@@ -153,6 +153,20 @@ class CameraService extends ChangeNotifier {
     }
   }
 
+  Future<XFile?> takePicture() async {
+    if (_controller == null || !_controller!.value.isInitialized || _isRecording) {
+      return null;
+    }
+
+    try {
+      final file = await _controller!.takePicture();
+      return file;
+    } catch (e) {
+      debugPrint("Error taking picture: $e");
+      return null;
+    }
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
